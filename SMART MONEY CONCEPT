@@ -1,0 +1,59 @@
+//@version=6
+strategy("ICT Smart Money Concept", overlay=true)
+
+// === Market Structure & Break of Structure (BOS) ===
+high_prev = ta.highest(high, 20)  // Previous 20 bars high
+low_prev = ta.lowest(low, 20)     // Previous 20 bars low
+
+bos_up = ta.valuewhen(high > high_prev[1], high, 0) // Bullish BOS
+bos_down = ta.valuewhen(low < low_prev[1], low, 0)  // Bearish BOS
+
+plotshape(bos_up, title="Bullish BOS", location=location.belowbar, color=color.green, style=shape.labelup, text="BOS↑")
+plotshape(bos_down, title="Bearish BOS", location=location.abovebar, color=color.red, style=shape.labeldown, text="BOS↓")
+
+// === Order Block Detection ===
+ob_bullish = ta.highest(close[1], 5) < open and ta.lowest(close[1], 5) > close  // Bullish OB
+ob_bearish = ta.lowest(close[1], 5) > open and ta.highest(close[1], 5) < close  // Bearish OB
+
+plotshape(ob_bullish, location=location.belowbar, color=color.blue, style=shape.triangleup, text="OB")
+plotshape(ob_bearish, location=location.abovebar, color=color.orange, style=shape.triangledown, text="OB")
+
+// === Fair Value Gap (FVG) Detection ===
+fvg_up = (low[1] > high[2]) // Bullish imbalance
+fvg_down = (high[1] < low[2]) // Bearish imbalance
+
+plotshape(fvg_up, location=location.belowbar, color=color.green, style=shape.circle, text="FVG")
+plotshape(fvg_down, location=location.abovebar, color=color.red, style=shape.circle, text="FVG")
+
+// === Optimal Trade Entry (OTE) Using Fibonacci ===
+fib_high = ta.highest(high, 20)
+fib_low = ta.lowest(low, 20)
+fib_ote_buy = fib_low + ((fib_high - fib_low) * 0.705)
+fib_ote_sell = fib_high - ((fib_high - fib_low) * 0.705)
+
+// === Kill Zones (Avoid Asian Session) ===
+session_london = (hour >= 7 and hour < 10)
+session_ny = (hour >= 13 and hour < 16)
+
+// === Trade Conditions ===
+// Buy Scenario: Bullish OB + FVG + MSS + OTE + Kill Zone
+buy_signal = ob_bullish and fvg_up and close > bos_up and ta.crossover(close, fib_ote_buy) and session_london
+sell_signal = ob_bearish and fvg_down and close < bos_down and ta.crossunder(close, fib_ote_sell) and session_ny
+
+// === Trade Execution ===
+strategy.entry("BUY", strategy.long, when=buy_signal)
+strategy.entry("SELL", strategy.short, when=sell_signal)
+
+// === Stop Loss & Take Profit ===
+sl_buy = ta.lowest(low, 10)
+tp_buy = close + (close - sl_buy) * 2.0
+
+sl_sell = ta.highest(high, 10)
+tp_sell = close - (sl_sell - close) * 2.0
+
+strategy.exit("EXIT BUY", from_entry="BUY", stop=sl_buy, limit=tp_buy)
+strategy.exit("EXIT SELL", from_entry="SELL", stop=sl_sell, limit=tp_sell)
+
+// === Alerts ===
+alertcondition(buy_signal, title="BUY Signal", message="ICT Buy Confirmation!")
+alertcondition(sell_signal, title="SELL Signal", message="ICT Sell Confirmation!")
